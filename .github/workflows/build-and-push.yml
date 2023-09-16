@@ -1,0 +1,92 @@
+name: Check and update Docker image
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # every day at 00:00
+
+  workflow_dispatch:
+    inputs:
+      specific_tag:
+        description: "Specific tag"
+        required: false
+        type: string
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+
+    outputs:
+      need-update: ${{ steps.compare-version.outputs.need-update }}
+      image-version: ${{ steps.compare-version.outputs.image-version }}
+
+    steps:
+      - name: Get latest version
+        id: get-latest-version
+        run: |
+          if [[ "${{ inputs.specific_tag }}" ]]; then
+            LATEST_VERSION=${{ inputs.specific_tag }}
+          else
+            RESPONSE=$(curl -s https://hub.docker.com/v2/namespaces/surrealdb/repositories/surrealdb/tags)
+            LATEST_VERSION=$(echo $RESPONSE | jq -r 'select(.results != null) | .results | map(select(.name | test("^[0-9]"))) | sort_by(.last_updated) | reverse | .[0].name')
+          fi
+          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
+
+      - name: Get current version
+        id: get-current-version
+        run: |
+          RESPONSE=$(curl -s https://hub.docker.com/v2/namespaces/${{ vars.DOCKERHUB_USERNAME }}/repositories/surrealdb/tags)
+          CURRENT_VERSION=$(echo $RESPONSE | jq -r 'select(.results != null) | .results | map(select(.name | test("^[0-9]"))) | sort_by(.last_updated) | reverse | .[0].name')
+          echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_ENV
+
+      - name: Check if need update
+        id: compare-version
+        run: |
+          if [ -z "$CURRENT_VERSION" ] || [ $LATEST_VERSION != $CURRENT_VERSION ]; then
+            echo "need-update=true" >> $GITHUB_OUTPUT
+            echo "image-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+            echo "### Ok we have a new version ($LATEST_VERSION)! Let's update :rocket:" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "need-update=false" >> $GITHUB_OUTPUT
+          fi
+
+  make-docker-image:
+    runs-on: ubuntu-latest
+    needs: check-update
+    if: ${{ needs.check-update.outputs.need-update == 'true' }}
+
+    env:
+      IMAGE_VERSION: ${{ needs.check-update.outputs.image-version }}
+
+    strategy:
+      matrix:
+        include:
+          # Image based on surrealdb/surrealdb
+          - dockerfile: Dockerfile
+            image-tag: ${{ needs.check-update.outputs.image-version }}
+            image-latest-tag: latest
+
+          # Image based on debian
+          - dockerfile: Dockerfile.debian
+            image-tag: "debian-${{ needs.check-update.outputs.image-version }}"
+            image-latest-tag: debian-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Modify Dockerfile
+        run: |
+          sed -i "s/latest/$IMAGE_VERSION/g" ${{ matrix.dockerfile }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/surrealdb:${{ matrix.image-latest-tag }}, ${{ vars.DOCKERHUB_USERNAME }}/surrealdb:${{ matrix.image-tag }}

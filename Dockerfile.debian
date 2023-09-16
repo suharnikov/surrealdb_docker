@@ -1,0 +1,23 @@
+FROM surrealdb/surrealdb:latest AS surreal
+# We just need the binary from the surreal image
+
+FROM debian:stable-slim
+
+ENV SURREAL_FILE_NAME=surreal.db
+ENV SURREAL_PATH=file:/var/surreal_data/${SURREAL_FILE_NAME}
+
+COPY --from=surreal /surreal /usr/local/bin/surreal
+
+RUN groupadd -r surreal && useradd --no-log-init -r -g surreal surreal
+RUN mkdir /var/surreal_data/ && chown surreal:surreal /var/surreal_data
+
+USER surreal
+
+# Surreal environment variables to configure the startup
+# For example:
+# SURREAL_BIND=0.0.0.0:8521
+# SURREAL_USER=test_user
+# SURREAL_PASS=test_password
+# SURREAL_STRICT=true
+# see `surreal start --help` or surrealdb docs for more info
+CMD surreal start
