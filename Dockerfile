@@ -16,9 +16,11 @@ RUN echo "surrealdb:!::0:::::" >> /shadow
 # Prepare a dir to store the database (we can't create a dir in the surrealdb image...)
 RUN mkdir /var/surreal_data/
 
-
 # --- Result image ---
 FROM surrealdb/surrealdb:latest
+
+ENV SURREAL_FILE_NAME=surreal.db
+ENV SURREAL_PATH=file:/var/surreal_data/${SURREAL_FILE_NAME}
 
 # We need to copy the new files from the mediator-image
 COPY --from=mediator /passwd /etc/passwd
@@ -29,4 +31,11 @@ COPY --from=mediator --chown=surrealdb:surrealdb /var/surreal_data/ /var/surreal
 
 USER surrealdb
 
-CMD ["start", "file:/var/surreal_data/surreal.db"]
+# Surreal environment variables to configure the startup
+# For example:
+# SURREAL_BIND=0.0.0.0:8521
+# SURREAL_USER=test_user
+# SURREAL_PASS=test_password
+# SURREAL_STRICT=true
+# see `surreal start --help` or surrealdb docs for more info
+CMD ["start"]

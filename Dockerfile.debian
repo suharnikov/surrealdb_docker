@@ -20,4 +20,4 @@ USER surreal
 # SURREAL_PASS=test_password
 # SURREAL_STRICT=true
 # see `surreal start --help` or surrealdb docs for more info
-CMD surreal start
+CMD ["surreal", "start"]

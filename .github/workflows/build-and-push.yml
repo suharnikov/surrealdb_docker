@@ -11,6 +11,12 @@ on:
         required: false
         type: string
 
+      force_update:
+        description: "Force update"
+        required: false
+        type: boolean
+        default: false
+
 jobs:
   check-update:
     runs-on: ubuntu-latest
@@ -41,12 +47,17 @@ jobs:
       - name: Check if need update
         id: compare-version
         run: |
-          if [ -z "$CURRENT_VERSION" ] || [ $LATEST_VERSION != $CURRENT_VERSION ]; then
+          if [[ "${{ inputs.force_update }}" == "true" ]] || [ -z "$CURRENT_VERSION" ] || [ $LATEST_VERSION != $CURRENT_VERSION ]; then
             echo "need-update=true" >> $GITHUB_OUTPUT
             echo "image-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-            echo "### Ok we have a new version ($LATEST_VERSION)! Let's update :rocket:" >> $GITHUB_STEP_SUMMARY
+            if [[ "${{ inputs.force_update }}" == "true" ]]; then
+              echo "### Force update :warning:" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### New version found ($LATEST_VERSION)! Let's update :rocket:" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "need-update=false" >> $GITHUB_OUTPUT
+            echo "### No new version found :confused:" >> $GITHUB_STEP_SUMMARY
           fi
 
   make-docker-image:
