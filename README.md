@@ -1,3 +1,5 @@
+> The current state of Surrealdb is dismal. Too many issues with simple queries and memory leaks. I don't think I want to use it in the near future.
+
 # SurrealDB Docker Images
 
 This repository contains a solution for running [SurrealDB], a fast and scalable database system, in Docker with connected volume. It is based on the official images from [SurrealDB].
